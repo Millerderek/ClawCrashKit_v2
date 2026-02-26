@@ -1,0 +1,17 @@
+# Secrets
+config.env
+secrets/
+*.env
+telegram_notify.py
+
+# Python
+__pycache__/
+*.pyc
+.session_ingest_state.json
+
+# Backups
+snapshots/
+*.snapshot
+
+# Logs
+*.log
