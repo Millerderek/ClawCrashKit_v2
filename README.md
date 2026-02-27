@@ -167,7 +167,3 @@ ClawCrashKit works alongside OpenClaw's built-in memory (sqlite-vec). See [DUAL_
 - Docker & Docker Compose
 - Node.js 20+ (for OpenClaw)
 - `pip install mem0ai cryptography`
-
-## License
-
-MIT
