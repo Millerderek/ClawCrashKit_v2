@@ -16,7 +16,7 @@ Usage:
   clawcrashcart prune --keep-last <N>
   clawcrashcart status
 
-Author: ClawCrashKit Contributors
+Author: YOUR_NAME (YOUR_COMPANY) + Claude
 Version: 2.0.0
 """
 
@@ -65,7 +65,7 @@ CONFIG = {
         "/root/.openclaw/MEMORY.md",
         "/root/.openclaw/openclaw.json",
         "/root/.openclaw/skills",
-        "/etc/your-app/vault.env",
+        "/etc/openclaw/vault.env",
     ],
 
     # Agent config files

@@ -32,7 +32,7 @@ from pathlib import Path
 # Vault integration — pull API keys securely at runtime
 # ═══════════════════════════════════════════════════════════════════════════════
 
-VAULT_ENV = Path("/etc/your-app/vault.env")
+VAULT_ENV = Path("/etc/openclaw/vault.env")
 VAULT_FILE = Path("/etc/openclaw/vault.enc")
 
 def load_vault_env():
@@ -96,7 +96,7 @@ def get_memo_config() -> dict:
             "provider": "anthropic",
             "config": {
                 "api_key": anthropic_key,
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 2000,
             },
         },

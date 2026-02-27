@@ -2,7 +2,7 @@
 """
 session_ingest — Auto-ingest OpenClaw session summaries into Mem0
 
-Watches /root/.openclaw/memory/ for session markdown files.
+Watches /root/clawd/memory/ for session markdown files.
 Tracks which files have been ingested in a state file.
 Extracts key facts from conversations and stores them as memories.
 
@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MEMORY_DIR = Path("/root/.openclaw/memory")
+MEMORY_DIR = Path("/root/clawd/memory")
 STATE_FILE = Path("/root/openclaw-memory/.session_ingest_state.json")
 MEMO_CMD = "/usr/local/bin/openclaw-memo"
 USER = "your_user"

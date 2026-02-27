@@ -295,7 +295,7 @@ def detect_contradictions():
         # Heuristic contradiction check
         score = _heuristic_contradiction_score(text_a, text_b)
 
-        if score >= 0.6:
+        if score >= 0.75:
             # Flag as potential contradiction
             safe_a = mem_a
             safe_b = mem_b

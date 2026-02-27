@@ -34,7 +34,7 @@ echo "## Recent Memory Snapshot" >> "$MEMORY"
 echo "Last refreshed: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$MEMORY"
 echo "" >> "$MEMORY"
 
-for topic in "YOUR_NAME work YOUR_COMPANY" "infrastructure VPS Docker" "EXAMPLE_CLIENT communications" "ClawCrashCart backup" "OpenClaw memory Qdrant"; do
+for topic in "YOUR_NAME work YOUR_COMPANY" "infrastructure VPS Docker" "EXAMPLE_CLIENT Teams telephony" "ClawCrashCart backup" "OpenClaw memory Qdrant"; do
     results=$(python3 "$MEMO" search "$topic" --user "$USER" --limit 3 2>&1 | grep -oP '\[[\d.]+\] .+')
     if [ -n "$results" ]; then
         echo "### $topic" >> "$MEMORY"
