@@ -157,6 +157,10 @@ def send(text, parse_mode="Markdown"):
         return False
 ```
 
+## Dual Memory Architecture
+
+ClawCrashKit works alongside OpenClaw's built-in memory (sqlite-vec). See [DUAL_MEMORY.md](DUAL_MEMORY.md) for the full architecture and how both systems complement each other.
+
 ## Requirements
 
 - Python 3.10+
