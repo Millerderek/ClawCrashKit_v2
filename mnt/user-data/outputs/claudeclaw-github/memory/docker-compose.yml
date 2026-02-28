@@ -1,0 +1,114 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# OpenClaw Memory Stack — Docker Compose
+# Qdrant (vectors) + PostgreSQL (metadata/keyscores) + Redis (cache/pre-filter)
+#
+# All services bound to 127.0.0.1 — fully private, no network exposure.
+# Persistent volumes survive container restarts/upgrades.
+#
+# Usage:
+#   docker compose up -d          Start all services
+#   docker compose down           Stop all services
+#   docker compose logs -f        Tail logs
+#   docker compose ps             Check status
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Qdrant — Vector Store (semantic memory)
+  # Stores embeddings for conversational memories, searchable via cosine similarity
+  # API: http://127.0.0.1:6333   Dashboard: http://127.0.0.1:6333/dashboard
+  # ─────────────────────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: openclaw-memory-qdrant-1
+    ports:
+      - "127.0.0.1:6333:6333"    # REST API
+      - "127.0.0.1:6334:6334"    # gRPC (optional, for high-perf clients)
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL — Metadata Store (keyscores, confidence, TTLs, entity tags)
+  # Structured data about memories: who said it, when, confidence level,
+  # access counts, contradiction flags, decay timers
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: openclaw-memory-postgres-1
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: openclaw_memory
+      POSTGRES_USER: openclaw
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets:
+      - pg_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openclaw -d openclaw_memory"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Redis — Cache Layer (entity indices, keyscore cache, pre-filter lookups)
+  # Fast key-value store for the heuristic pre-filter stage.
+  # Entity→memory mappings served in microseconds before vector search runs.
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: openclaw-memory-redis-1
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+        --appendonly yes
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --save 60 100
+        --save 300 10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Secrets — stored as files, not in environment variables
+# ═══════════════════════════════════════════════════════════════════════════════
+secrets:
+  pg_password:
+    file: ./secrets/pg_password.txt
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Persistent Volumes
+# ═══════════════════════════════════════════════════════════════════════════════
+volumes:
+  qdrant_data:
+    name: openclaw-memory_qdrant_data
+  qdrant_snapshots:
+    name: openclaw-memory_qdrant_snapshots
+  pg_data:
+    name: openclaw-memory_pg_data
+  redis_data:
+    name: openclaw-memory_redis_data

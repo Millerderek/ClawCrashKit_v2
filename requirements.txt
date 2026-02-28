@@ -1,0 +1,11 @@
+# ClaudeClaw — Telegram to Claude Agent SDK Bridge
+python-telegram-bot>=21.0,<23.0
+claude-agent-sdk>=0.1.0
+python-dotenv>=1.0.0
+anyio>=4.0
+
+# Memory Stack (ClawCrashKit v2) — optional, for persistent Mem0 memory
+# Install with: pip install -r requirements.txt
+mem0ai>=0.1.0
+cryptography>=42.0
+qdrant-client>=1.9.0

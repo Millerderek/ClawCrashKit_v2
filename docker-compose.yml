@@ -1,37 +1,42 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# OpenClaw Memory Stack — Docker Compose
-# Qdrant (vectors) + PostgreSQL (metadata/keyscores) + Redis (cache/pre-filter)
-#
-# All services bound to 127.0.0.1 — fully private, no network exposure.
-# Persistent volumes survive container restarts/upgrades.
+# ClaudeClaw — Unified Docker Compose
+# Bot + Memory Stack (Qdrant + PostgreSQL + Redis)
 #
 # Usage:
-#   docker compose up -d          Start all services
-#   docker compose down           Stop all services
-#   docker compose logs -f        Tail logs
-#   docker compose ps             Check status
+#   docker compose up -d                                    Start everything
+#   docker compose up -d claudeclaw                         Bot only
+#   docker compose --profile memory up -d                   Bot + memory stack
+#   docker compose --profile memory up -d qdrant postgres redis  Memory only
+#   docker compose down                                     Stop all
 # ═══════════════════════════════════════════════════════════════════════════════
 
-version: '3.8'
-
 services:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Qdrant — Vector Store (semantic memory)
-  # Stores embeddings for conversational memories, searchable via cosine similarity
+  # ─── ClaudeClaw Bot ───────────────────────────────────────────────────────
+  claudeclaw:
+    build: .
+    container_name: claudeclaw
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${CLAUDECLAW_WORKING_DIR:-~/projects}:/workspace:rw
+      - ~/.claude:/root/.claude:ro
+
+  # ─── Qdrant — Vector Store (semantic memory) ─────────────────────────────
+  # Stores embeddings for conversational memories via cosine similarity
   # API: http://127.0.0.1:6333   Dashboard: http://127.0.0.1:6333/dashboard
-  # ─────────────────────────────────────────────────────────────────────────────
   qdrant:
     image: qdrant/qdrant:latest
     container_name: openclaw-memory-qdrant-1
     ports:
-      - "127.0.0.1:6333:6333"    # REST API
-      - "127.0.0.1:6334:6334"    # gRPC (optional, for high-perf clients)
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
       - qdrant_snapshots:/qdrant/snapshots
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
+    profiles: ["memory"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 30s
@@ -39,11 +44,8 @@ services:
       retries: 3
       start_period: 10s
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # PostgreSQL — Metadata Store (keyscores, confidence, TTLs, entity tags)
-  # Structured data about memories: who said it, when, confidence level,
-  # access counts, contradiction flags, decay timers
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── PostgreSQL — Metadata Store ──────────────────────────────────────────
+  # Keyscores, confidence, TTLs, entity tags, contradictions, feedback
   postgres:
     image: postgres:16-alpine
     container_name: openclaw-memory-postgres-1
@@ -57,8 +59,9 @@ services:
       - pg_password
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./memory/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     restart: unless-stopped
+    profiles: ["memory"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openclaw -d openclaw_memory"]
       interval: 30s
@@ -66,11 +69,8 @@ services:
       retries: 3
       start_period: 10s
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Redis — Cache Layer (entity indices, keyscore cache, pre-filter lookups)
-  # Fast key-value store for the heuristic pre-filter stage.
-  # Entity→memory mappings served in microseconds before vector search runs.
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── Redis — Cache Layer ──────────────────────────────────────────────────
+  # Entity indices, keyscore cache, pre-filter lookups
   redis:
     image: redis:7-alpine
     container_name: openclaw-memory-redis-1
@@ -86,6 +86,7 @@ services:
         --save 60 100
         --save 300 10
     restart: unless-stopped
+    profiles: ["memory"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -93,16 +94,10 @@ services:
       retries: 3
       start_period: 5s
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Secrets — stored as files, not in environment variables
-# ═══════════════════════════════════════════════════════════════════════════════
 secrets:
   pg_password:
-    file: ./secrets/pg_password.txt
+    file: ./memory/secrets/pg_password.txt
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Persistent Volumes
-# ═══════════════════════════════════════════════════════════════════════════════
 volumes:
   qdrant_data:
     name: openclaw-memory_qdrant_data
