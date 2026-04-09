@@ -350,6 +350,11 @@ class Config:
         "clawcrashcart", "memory-refresh", "docker", "docker-compose",
         "docker compose",
     ])
+    benchmark_models: list[str] = field(default_factory=lambda: [
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
+    ])
 
     @classmethod
     def from_env(cls):
@@ -376,6 +381,9 @@ class Config:
             cfg.allowed_tools = [t.strip() for t in raw_tools.split(",") if t.strip()]
         mt = os.environ.get("CLAUDECLAW_MAX_TURNS", "0")
         cfg.max_turns = int(mt) if mt else 0
+        raw_bm = os.environ.get("CLAUDECLAW_BENCHMARK_MODELS", "")
+        if raw_bm:
+            cfg.benchmark_models = [m.strip() for m in raw_bm.split(",") if m.strip()]
         return cfg
 
     def validate(self):
@@ -712,6 +720,74 @@ async def cmd_memory(update, context):
         await update.message.reply_text(chunk)
 
 
+async def cmd_benchmark(update, context):
+    """Run the same prompt against multiple Claude models in parallel and compare."""
+    config = context.bot_data["config"]
+    uid = update.effective_user.id
+    if not is_authorized(config, uid):
+        await update.message.reply_text("Unauthorized."); return
+
+    prompt = " ".join(context.args) if context.args else ""
+    if not prompt:
+        model_list = "\n".join("- " + m for m in config.benchmark_models)
+        await update.message.reply_text(
+            "Usage: /benchmark <prompt>\n\n"
+            "Runs your prompt against multiple models simultaneously.\n\n"
+            "Models:\n%s\n\n"
+            "Override with CLAUDECLAW_BENCHMARK_MODELS env var (comma-separated)." % model_list
+        )
+        return
+
+    models = config.benchmark_models
+    await update.message.reply_text(
+        "Benchmarking %d models...\n%s" % (len(models), "\n".join("- " + m for m in models))
+    )
+
+    typing_task = asyncio.create_task(keep_typing(update))
+
+    async def run_model(model_id):
+        opts = ClaudeAgentOptions(
+            cwd=config.working_dir,
+            model=model_id,
+            max_turns=1,
+            permission_mode="acceptEdits",
+        )
+        t0 = time.monotonic()
+        try:
+            client = ClaudeSDKClient(opts)
+            await client.connect()
+            await client.query(prompt)
+            text_parts = []
+            async for msg in client.receive_response():
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            text_parts.append(block.text)
+            await client.disconnect()
+            elapsed = time.monotonic() - t0
+            return model_id, "\n\n".join(text_parts) or "(no text response)", elapsed, None
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            return model_id, None, elapsed, str(e)
+
+    try:
+        results = await asyncio.gather(*[run_model(m) for m in models])
+    finally:
+        typing_task.cancel()
+        try: await typing_task
+        except asyncio.CancelledError: pass
+
+    for model_id, text, elapsed, err in results:
+        if err:
+            await update.message.reply_text(
+                "--- %s (%.1fs) ---\nERROR: %s" % (model_id, elapsed, err)
+            )
+        else:
+            header = "--- %s (%.1fs) ---\n\n" % (model_id, elapsed)
+            for chunk in chunk_message(header + text, config.max_message_length):
+                await update.message.reply_text(chunk)
+
+
 # ─── Telegram Message Handlers ─────────────────────────────────────────────
 
 async def handle_message(update, context):
@@ -789,6 +865,7 @@ async def post_init(app):
         BotCommand("memory", "Inspect memory files"),
         BotCommand("new", "Fresh conversation + approvals"),
         BotCommand("approvals", "View session-approved tools"),
+        BotCommand("benchmark", "Compare models on a prompt"),
         BotCommand("workspace", "List files"),
         BotCommand("whoami", "Your Telegram ID"),
     ])
@@ -881,6 +958,7 @@ def main():
     app.add_handler(CommandHandler("workspace", cmd_workspace))
     app.add_handler(CommandHandler("whoami", cmd_whoami))
     app.add_handler(CommandHandler("memory", cmd_memory))
+    app.add_handler(CommandHandler("benchmark", cmd_benchmark))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
